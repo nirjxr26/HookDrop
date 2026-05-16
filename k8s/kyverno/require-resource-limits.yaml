@@ -1,0 +1,25 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-resource-limits
+spec:
+  validationFailureAction: Enforce
+  background: true
+  rules:
+    - name: resources-required
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - hookdrop
+      validate:
+        message: "CPU and memory limits are required for all containers in hookdrop namespace."
+        pattern:
+          spec:
+            containers:
+              - resources:
+                  limits:
+                    cpu: "?*"
+                    memory: "?*"
