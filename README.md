@@ -1,114 +1,166 @@
 # HookDrop
 
-HookDrop is a mock webhook receiver written in Go. It accepts webhook traffic, stores requests in memory, exposes a live SSE feed per bucket, and includes a full DevOps pipeline around the app.
+POST a webhook to `/h/<bucket>`. It catches it. You inspect it.
 
-## Architecture
+That's the app. The interesting part is everything running behind it.
 
-The Go service exposes `POST /h/:id` to ingest webhooks, `GET /h/:id` to read stored events, `GET /h/:id/stream` for SSE updates, plus `GET /healthz` and `GET /readyz` for health checks. Events live in an in-memory ring buffer with a max of 50 events per bucket, and each request is logged as structured JSON with `zerolog`.
+---
 
-The delivery path is GitHub Actions to AWS ECR to ArgoCD to a kind-based Kubernetes cluster. CI builds, tests, scans, and publishes an image, then ArgoCD syncs the Helm chart into the target cluster.
+## What It Does
 
-## DevOps Stack
+Five routes:
 
-| Tool | Purpose | Where it fits |
-|---|---|---|
-| Go | Application runtime | Webhook receiver and SSE server |
-| Docker | Container build | Multi-stage image build |
-| Distroless | Final image base | Minimal runtime image with no shell |
-| GitHub Actions | CI pipeline | Build, test, lint, scan, publish |
-| Trivy | Security scanning | Image scan and Helm config scan |
-| AWS ECR | Container registry | Stores published images |
-| Helm 3 | Kubernetes packaging | Deploys the app manifests |
-| ArgoCD | GitOps deployment | Syncs Helm chart to cluster |
-| kind | Local cluster | Runs the GitOps setup locally |
-| Kyverno | Policy enforcement | Blocks bad pod specs |
-| Sealed Secrets | Secret handling | Encrypted secrets in git |
-| zerolog | Structured logging | JSON request/event logs |
-| HPA | Autoscaling | Scales the Deployment on CPU |
+- `POST /h/<bucket>` — receives any webhook, stores it in memory
+- `GET /h/<bucket>` — returns the last 50 events for that bucket
+- `GET /h/<bucket>/stream` — SSE stream, new events pushed live
+- `GET /healthz` / `GET /readyz` — liveness and readiness probes
+- `GET /` — usage hints
 
-## Getting Started
+Each stored event has a trace ID, the bucket name, method, headers, body, source IP, and timestamp. The store is in-memory only — no database, no Redis. 50 events per bucket, oldest dropped first.
 
-### Prerequisites
+---
 
-Go 1.25.10, Docker, kind, kubectl, helm, argocd CLI, kubeseal, golangci-lint, trivy.
+## Why I Built This
 
-### Run locally
+I wanted a project small enough to understand completely but with enough moving parts to build a real DevOps pipeline around. A webhook receiver fits that. The app itself is ~300 lines of Go. Everything else — the CI, the GitOps loop, the security layer — is the actual point.
+
+---
+
+## Stack
+
+**Frontend**
+- Server-rendered dashboard in Go (`handler/dashboard.go`) — usage hints, bucket URLs
+- SSE stream at `/h/<bucket>/stream` — new webhooks pushed live to the browser, no polling
+
+**Backend**
+- Go 1.22, stdlib `net/http` only (no Gin, no Echo)
+- `zerolog` for structured JSON logging, trace ID on every request
+- In-memory ring buffer, 50 events per bucket, thread-safe with `sync.RWMutex`
+- Graceful shutdown on `SIGINT`/`SIGTERM`, 10 second drain window
+
+**DevOps**
+- Docker: multi-stage build, distroless final image, non-root UID 65532, read-only root filesystem
+- GitHub Actions: lint → test → Trivy image scan → Trivy Helm config scan → build → push ECR → update `values-prod.yaml`
+- AWS ECR: image registry, SHA-tagged on every push
+- Helm 3: separate `values-local.yaml` and `values-prod.yaml`, HPA with properly set requests so autoscaling actually works
+- ArgoCD: GitOps sync, auto-prune, self-heal — cluster state always matches git
+- kind: local Kubernetes cluster, EKS-compatible manifests
+- Kyverno: two admission policies — no `latest` tags, required resource limits, both enforced not just documented
+- Bitnami Sealed Secrets: secrets encrypted before they touch git
+
+---
+
+## Local Setup
+
+You need: Go 1.22, Docker, kind, kubectl, helm, argocd CLI, golangci-lint, trivy
 
 ```bash
+# Just run the app
 go run ./...
-```
+# POST http://localhost:8080/h/test
+# GET  http://localhost:8080/h/test
 
-### Run in Docker
-
-```bash
+# Or with Docker
 make docker-run
-```
 
-### Full cluster setup
-
-```bash
+# Full local cluster
 make cluster-up
 kubectl apply -f k8s/argocd/application.yaml
-argocd app get hookdrop
 ```
 
-## CI/CD Pipeline
+The local ArgoCD Application uses `values-local.yaml` which points to `hookdrop:local` with `pullPolicy: Never`. To get an image into the cluster:
 
-Pushes to `main` run lint, tests, Trivy image scanning, Trivy Helm config scanning, build and push the image to ECR, and then update `helm/hookdrop/values-prod.yaml` with the new tag. ArgoCD watches the repo, detects the change, and syncs the cluster automatically.
+```bash
+docker build -t hookdrop:local .
+kind load docker-image hookdrop:local --name hookdrop
+```
+
+No pull secrets, no ECR auth, no token expiry headaches locally. ECR is only in the CI/production path where it makes sense — EKS nodes pull via IAM automatically.
+
+---
+
+## CI/CD Flow
+
+```
+git push to main
+  → lint + test
+  → docker build
+  → trivy image scan     (fails CI on HIGH/CRITICAL)
+  → trivy config scan    (fails CI on Helm misconfigs)
+  → push to ECR          (tagged sha-<commit>)
+  → update values-prod.yaml image.tag
+  → ArgoCD detects drift
+  → syncs Helm chart to cluster
+  → new pod rolls out
+```
+
+The cluster updates itself. Nothing manual after the push.
+
+---
 
 ## Security Choices
 
-- Distroless final image, so there is no shell or package manager in the runtime image.
-- Non-root container user with UID 65532.
-- `readOnlyRootFilesystem` and dropped capabilities.
-- Trivy scans both the image and the Helm manifests in CI.
-- Sealed Secrets keeps encrypted secret manifests safe to commit.
-- Kyverno blocks `latest` tags and requires resource limits in the `hookdrop` namespace.
+- Distroless image — no shell, no package manager, smaller CVE surface
+- Non-root UID 65532, `readOnlyRootFilesystem: true`, all capabilities dropped, `seccompProfile: RuntimeDefault`
+- Trivy runs on both the image and the Helm chart in CI, not just one
+- Kyverno rejects pods at admission if they use `latest` tag or missing resource limits — enforced, not just documented
+- Sealed Secrets encrypts anything sensitive before it touches git
 
-## Deploying to EKS
+---
 
-Everything here is cluster-agnostic. For local kind development, use `values-local.yaml` (local image). For EKS/production, set your ECR URI in `values-prod.yaml`, update the `repoURL` in `k8s/argocd/application.yaml` (or use a prod-specific ArgoCD app manifest), and point your kubeconfig at the EKS cluster.
+## Two Deployment Profiles
 
-## Project Structure
+| | Local (kind) | Production (EKS) |
+|---|---|---|
+| Image | `hookdrop:local` | ECR URI + SHA tag |
+| Pull policy | `Never` | `Always` |
+| Auth | None | IAM role on node |
+| Ingress | Disabled | Enabled |
+| Values file | `values-local.yaml` | `values-prod.yaml` |
 
-```text
-.
-├── .gitignore # Ignore local build outputs and env files.
-├── Dockerfile # Multi-stage container build.
-├── Makefile # Local, CI, Docker, and cluster commands.
-├── README.md # Project overview and setup guide.
-├── docker-compose.yml # Local container runtime composition.
-├── go.mod # Go module definition.
-├── go.sum # Go dependency checksums.
-├── main.go # HTTP server entrypoint and graceful shutdown.
-├── handler/ # HTTP handlers.
-│   ├── dashboard.go # Basic landing page handler.
-│   ├── health.go # Health and readiness handlers.
-│   └── webhook.go # Webhook ingest, list, and SSE handlers.
-├── helm/ # Helm chart for Kubernetes deployment.
-│   └── hookdrop/ # HookDrop chart.
-│       ├── Chart.yaml # Chart metadata.
-│       ├── values-prod.yaml # Production overrides.
-│       ├── values.yaml # Default chart values.
-│       └── templates/ # Kubernetes manifests.
-│           ├── _helpers.tpl # Shared name and label helpers.
-│           ├── deployment.yaml # Application Deployment.
-│           ├── hpa.yaml # HorizontalPodAutoscaler.
-│           ├── ingress.yaml # Optional ingress.
-│           ├── service.yaml # ClusterIP service.
-│           └── serviceaccount.yaml # Service account and IRSA annotation hook.
-├── k8s/ # GitOps and policy manifests.
-│   ├── argocd/ # ArgoCD application definition.
-│   │   └── application.yaml # ArgoCD Application resource.
-│   ├── kind/ # Local cluster config.
-│   │   └── cluster.yaml # kind cluster definition.
-│   ├── kyverno/ # Policy-as-code.
-│   │   ├── no-latest-tag.yaml # Blocks latest image tags.
-│   │   └── require-resource-limits.yaml # Requires CPU and memory limits.
-│   └── sealed-secrets/ # Sealed Secrets instructions.
-│       └── README.md # How to seal and apply secrets.
-├── scripts/ # Automation scripts.
-│   └── setup-cluster.sh # Bootstraps kind, ArgoCD, Kyverno, and Sealed Secrets.
-└── store/ # In-memory persistence.
-    └── memory.go # Ring buffer and SSE subscriber store.
+Switch the ArgoCD Application to `values-prod.yaml` for the production path.
+
+---
+
+## Repo Layout
+
 ```
+.
+├── main.go
+├── handler/
+│   ├── webhook.go       # ingest, list, SSE stream
+│   ├── health.go        # /healthz, /readyz
+│   └── dashboard.go     # landing page
+├── store/
+│   └── memory.go        # thread-safe ring buffer + SSE fanout
+├── Dockerfile
+├── docker-compose.yml
+├── Makefile
+├── helm/hookdrop/
+│   ├── values.yaml
+│   ├── values-local.yaml
+│   ├── values-prod.yaml
+│   └── templates/
+├── k8s/
+│   ├── argocd/application.yaml
+│   ├── kind/cluster.yaml
+│   ├── kyverno/
+│   │   ├── no-latest-tag.yaml
+│   │   └── require-resource-limits.yaml
+│   └── sealed-secrets/README.md
+└── scripts/
+    └── setup-cluster.sh
+```
+
+---
+
+## Troubleshooting
+
+**`ImagePullBackOff` on kind**
+The cluster is using the prod values file and trying to hit ECR. Check that `k8s/argocd/application.yaml` references `values-local.yaml`, not `values-prod.yaml`. Then load the local image: `kind load docker-image hookdrop:local --name hookdrop`.
+
+**ArgoCD shows OutOfSync but won't sync**
+Usually a Kyverno policy block. Run `kubectl describe pod <pod> -n hookdrop` and check events — it'll say which policy failed.
+
+**Kyverno blocking your pod**
+Either missing resource limits or using `latest` tag. Both are intentional. Fix the values file, not the policy.
