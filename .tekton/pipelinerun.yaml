@@ -1,0 +1,39 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: hookdrop-{{ revision }}-{{ repo_name_slug }}-{{ timestamp }}
+  namespace: hookdrop-ci
+  annotations:
+    pipelinesascode.tekton.dev/on-event: "[push, pull_request]"
+    pipelinesascode.tekton.dev/on-target-branch: "[main]"
+    pipelinesascode.tekton.dev/task-status: "[all]"
+spec:
+  pipelineRef:
+    name: hookdrop-release
+    namespace: hookdrop-ci
+  serviceAccountName: tekton-hookdrop
+  workspaces:
+    - name: source
+      persistentVolumeClaim:
+        claimName: hookdrop-source-pvc
+  params:
+    - name: repo-url
+      value: "{{ repo_url }}"
+    - name: revision
+      value: "{{ revision }}"
+    - name: aws-region
+      value: us-east-1
+    - name: image-tag
+      value: "{{ revision }}"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: hookdrop-source-pvc
+  namespace: hookdrop-ci
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi

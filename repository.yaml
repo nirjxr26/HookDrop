@@ -1,0 +1,9 @@
+apiVersion: pipelinesascode.tekton.dev/v1alpha1
+kind: Repository
+
+metadata:
+  name: hookdrop-repo
+  namespace: hookdrop-ci
+
+spec:
+  url: https://github.com/nirjxr26/HookDrop

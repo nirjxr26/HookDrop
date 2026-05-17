@@ -1,0 +1,169 @@
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hookdrop-clone
+  namespace: hookdrop-ci
+
+spec:
+  params:
+    - name: repo-url
+      type: string
+
+    - name: revision
+      type: string
+      default: main
+
+  workspaces:
+    - name: source
+
+  steps:
+    - name: clone
+      image: alpine/git:2.45.2
+      script: |
+        #!/bin/sh
+        set -eu
+
+        mkdir -p "$(workspaces.source.path)"
+        cd "$(workspaces.source.path)"
+
+        find . -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+
+        git init
+        git config --global --add safe.directory '*'
+
+        git remote add origin "$(params.repo-url)"
+        git fetch --depth 1 origin "$(params.revision)"
+        git checkout FETCH_HEAD
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hookdrop-test
+  namespace: hookdrop-ci
+
+spec:
+  workspaces:
+    - name: source
+
+  steps:
+    - name: test
+      image: golang:1.25-alpine3.22
+      workingDir: $(workspaces.source.path)
+
+      env:
+        - name: CGO_ENABLED
+          value: "1"
+
+      script: |
+        #!/bin/sh
+        set -eu
+
+        apk add --no-cache build-base >/dev/null
+
+        go test -race ./...
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hookdrop-trivy-config
+  namespace: hookdrop-ci
+
+spec:
+  workspaces:
+    - name: source
+
+  steps:
+    - name: scan-config
+      image: aquasec/trivy:0.61.0
+      workingDir: $(workspaces.source.path)
+
+      script: |
+        #!/bin/sh
+        set -eu
+
+        if [ -d helm ]; then
+          trivy config --exit-code 1 --severity HIGH,CRITICAL helm
+        fi
+
+        if [ -d k8s ]; then
+          trivy config --exit-code 1 --severity HIGH,CRITICAL k8s
+        fi
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hookdrop-build-push
+  namespace: hookdrop-ci
+
+spec:
+  params:
+    - name: dockerfile
+      type: string
+      default: Dockerfile
+
+  workspaces:
+    - name: source
+
+  steps:
+    - name: build-image-tar
+      image: gcr.io/kaniko-project/executor:v1.24.0-debug
+      workingDir: $(workspaces.source.path)
+
+      script: |
+        #!/busybox/sh
+        set -eu
+
+        /kaniko/executor \
+          --context=$(workspaces.source.path) \
+          --dockerfile=$(params.dockerfile) \
+          --tar-path=$(workspaces.source.path)/image.tar \
+          --no-push \
+          --snapshot-mode=redo
+
+---
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: hookdrop-sbom-scan
+  namespace: hookdrop-ci
+
+spec:
+  workspaces:
+    - name: source
+
+  steps:
+    - name: generate-sbom
+      image: alpine:3.20
+      workingDir: $(workspaces.source.path)
+
+      script: |
+        #!/bin/sh
+        set -eu
+
+        apk add --no-cache curl >/dev/null
+
+        curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+          | sh -s -- -b /usr/local/bin
+
+        syft dir:$(workspaces.source.path) \
+          -o json > $(workspaces.source.path)/sbom.json
+
+    - name: grype-scan
+      image: alpine:3.20
+      workingDir: $(workspaces.source.path)
+
+      script: |
+        #!/bin/sh
+        set -eu
+
+        apk add --no-cache curl >/dev/null
+
+        curl -sSfL https://raw.githubusercontent.com/anchore/grype/main/install.sh \
+          | sh -s -- -b /usr/local/bin
+
+        grype sbom:$(workspaces.source.path)/sbom.json \
+          --fail-on high \
+          -o table

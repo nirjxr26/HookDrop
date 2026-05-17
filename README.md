@@ -98,6 +98,30 @@ The cluster updates itself. Nothing manual after the push.
 
 ---
 
+## Tekton
+
+Tekton is now available as an in-cluster CI runner for this project. The manifests live in [k8s/tekton](k8s/tekton), and the pipeline does the following:
+
+- clones the repo
+- runs Go tests with race detection
+- scans Helm and Kubernetes manifests with Trivy
+ - builds the container image into a tarball (no push)
+ - generates an SBOM and runs a Grype vulnerability scan
+
+Tekton does not replace ArgoCD here. It produces the image; ArgoCD still handles deployment after the Helm tag is updated.
+
+Manual flow:
+
+1. Install Tekton Pipelines in the cluster.
+2. Wait for the Tekton controller and webhook deployments to be available if you just installed Tekton.
+3. Apply the Tekton manifests.
+4. Edit [k8s/tekton/pipelinerun.yaml](k8s/tekton/pipelinerun.yaml) with your image tag (used only for local naming).
+5. Run the PipelineRun.
+6. Update the Helm image tag or use an image updater so ArgoCD can deploy the new image pushed by GitHub Actions.
+
+If you want the shortest command path, use `make tekton-apply` and `make tekton-run`.
+`make tekton-run` uses `kubectl create` because the PipelineRun manifest uses `generateName`.
+
 ## Security Choices
 
 - Distroless image — no shell, no package manager, smaller CVE surface
@@ -147,6 +171,13 @@ Switch the ArgoCD Application to `values-prod.yaml` for the production path.
 │   ├── kyverno/
 │   │   ├── no-latest-tag.yaml
 │   │   └── require-resource-limits.yaml
+│   ├── tekton/
+│   │   ├── pipeline.yaml
+│   │   ├── pipelinerun.yaml
+│   │   ├── README.md
+│   │   ├── serviceaccount.yaml
+│   │   ├── namespace.yaml
+│   │   └── tasks.yaml
 │   └── sealed-secrets/README.md
 └── scripts/
     └── setup-cluster.sh
