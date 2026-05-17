@@ -1,0 +1,122 @@
+name: reusable-build
+
+on:
+  workflow_call:
+    inputs:
+      image_tag:
+        required: true
+        type: string
+      ecr_repository:
+        required: true
+        type: string
+      aws_region:
+        required: false
+        type: string
+        default: ap-south-1
+      publish:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      AWS_ACCOUNT_ID:
+        required: true
+      AWS_ROLE_ARN:
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      IMAGE_TAG: ${{ inputs.image_tag }}
+      ECR_REPOSITORY: ${{ inputs.ecr_repository }}
+      AWS_REGION: ${{ inputs.aws_region }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go 1.25.10
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.10"
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test -race ./...
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.1.6
+          install-mode: goinstall
+          skip-cache: true
+
+      - name: Configure AWS credentials
+        if: inputs.publish
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Ensure ECR repository exists
+        if: inputs.publish
+        run: |
+          aws ecr describe-repositories --repository-names "${ECR_REPOSITORY}" --region "${AWS_REGION}" >/dev/null 2>&1 || \
+          aws ecr create-repository --repository-name "${ECR_REPOSITORY}" --region "${AWS_REGION}"
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        if: inputs.publish
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+          format: table
+          exit-code: 1
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+
+      - name: Trivy config scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: config
+          scan-ref: ./helm
+          exit-code: 1
+          severity: HIGH,CRITICAL
+
+      - name: Push image to ECR
+        if: inputs.publish
+        run: docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+      - name: Update Helm image tag
+        if: inputs.publish
+        run: |
+          sed -i "s/^  tag: .*/  tag: \"${IMAGE_TAG}\"/" helm/hookdrop/values-prod.yaml
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add helm/hookdrop/values-prod.yaml
+          git commit -m "ci: update image tag to ${IMAGE_TAG} [skip ci]" || exit 0
+          git push

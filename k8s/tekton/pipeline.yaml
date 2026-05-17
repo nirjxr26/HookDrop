@@ -1,0 +1,71 @@
+apiVersion: tekton.dev/v1
+kind: Pipeline
+metadata:
+  name: hookdrop-release
+  namespace: hookdrop-ci
+spec:
+  params:
+    - name: repo-url
+      type: string
+    - name: revision
+      type: string
+      default: main
+    - name: aws-region
+      type: string
+      default: us-east-1
+    - name: image-tag
+      type: string
+  workspaces:
+    - name: source
+  tasks:
+    - name: clone-repo
+      taskRef:
+        name: hookdrop-clone
+      params:
+        - name: repo-url
+          value: $(params.repo-url)
+        - name: revision
+          value: $(params.revision)
+      workspaces:
+        - name: source
+          workspace: source
+
+    - name: go-test
+      runAfter:
+        - clone-repo
+      taskRef:
+        name: hookdrop-test
+      workspaces:
+        - name: source
+          workspace: source
+
+    - name: trivy-config
+      runAfter:
+        - clone-repo
+      taskRef:
+        name: hookdrop-trivy-config
+      workspaces:
+        - name: source
+          workspace: source
+
+    - name: build-image
+      runAfter:
+        - go-test
+        - trivy-config
+      taskRef:
+        name: hookdrop-build-push
+      params:
+        - name: dockerfile
+          value: Dockerfile
+      workspaces:
+        - name: source
+          workspace: source
+
+    - name: sbom-scan
+      runAfter:
+        - build-image
+      taskRef:
+        name: hookdrop-sbom-scan
+      workspaces:
+        - name: source
+          workspace: source

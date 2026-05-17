@@ -1,0 +1,38 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+
+metadata:
+  generateName: hookdrop-pac-
+  namespace: hookdrop-ci
+
+  annotations:
+    pipelinesascode.tekton.dev/on-event: "[push]"
+    pipelinesascode.tekton.dev/on-target-branch: "[main]"
+
+spec:
+  pipelineRef:
+    name: hookdrop-release
+
+  taskRunTemplate:
+    serviceAccountName: tekton-hookdrop
+
+  params:
+    - name: repo-url
+      value: "{{ repo_url }}"
+
+    - name: revision
+      value: "{{ revision }}"
+
+    - name: image-tag
+      value: "{{ revision }}"
+
+  workspaces:
+    - name: source
+      volumeClaimTemplate:
+        spec:
+          accessModes:
+            - ReadWriteOnce
+
+          resources:
+            requests:
+              storage: 1Gi
