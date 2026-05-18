@@ -1,0 +1,75 @@
+---
+# HookDrop Local Kubernetes Cluster Bootstrap
+# This playbook bootstraps the complete local dev environment
+
+- name: HookDrop Local Kubernetes Cluster Bootstrap
+  hosts: localhost
+  gather_facts: true
+
+  pre_tasks:
+    - name: Display bootstrap start message
+      debug:
+        msg: |
+          🚀 Starting HookDrop Local Kubernetes Cluster Bootstrap
+          Platform: {{ ansible_facts['system'] }}
+          Python: {{ ansible_facts['python_version'] }}
+          Working directory: {{ lookup('env', 'HOME') }}
+
+  roles:
+    - role: prep
+      tags: [prep]
+    - role: cluster
+      tags: [cluster]
+      when: not ansible_check_mode
+    - role: argocd
+      tags: [argocd]
+      when: not ansible_check_mode
+    - role: policy
+      tags: [policy]
+      when: not ansible_check_mode
+    - role: secrets
+      tags: [secrets]
+      when: not ansible_check_mode
+
+  post_tasks:
+    - name: Display cluster status
+      shell: kubectl cluster-info
+      register: cluster_info
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Wait for critical components
+      shell: |
+        echo "Checking ArgoCD..."
+        kubectl wait --for=condition=available --timeout=120s deployment/argocd-server -n argocd 2>/dev/null || echo "ArgoCD still initializing..."
+        echo "Checking Kyverno..."
+        kubectl wait --for=condition=available --timeout=120s deployment/kyverno -n kyverno 2>/dev/null || echo "Kyverno still initializing..."
+      changed_when: false
+      ignore_errors: true
+      when: not ansible_check_mode
+
+    - name: Display completion summary
+      debug:
+        msg: |
+         ✅ Bootstrap Complete!
+
+         Cluster Status:
+         {{ (cluster_info.stdout if (cluster_info is defined and cluster_info.stdout is defined) else 'No cluster status available') }}
+
+         Next steps:
+         1. Apply ArgoCD Application:
+           kubectl apply -f k8s/argocd/application.yaml
+
+         2. Access ArgoCD UI:
+           kubectl port-forward svc/argocd-server -n argocd 8081:443
+           URL: https://localhost:8081
+           Username: admin
+           Password: See output above or run:
+            kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+
+         3. Build and load local image:
+           docker build -t hookdrop:local .
+           kind load docker-image hookdrop:local --name hookdrop
+
+         Cluster ready at: {{ (cluster_info.stdout_lines[0] if (cluster_info is defined and cluster_info.stdout_lines is defined and (cluster_info.stdout_lines | length) > 0) else 'unknown') }}
+        when: not ansible_check_mode

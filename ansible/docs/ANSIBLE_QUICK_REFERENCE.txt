@@ -1,0 +1,185 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                ║
+║           📋 ANSIBLE REORGANIZATION - QUICK REFERENCE CARD                    ║
+║                                                                                ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+NAME MAPPING (Short & Easy to Remember)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+prerequisites       →  prep               Install tools & prerequisites
+kind_cluster        →  cluster            Create local Kubernetes
+argocd              →  argocd             GitOps deployment
+kyverno             →  policy             Policy enforcement
+sealed_secrets      →  secrets            Secret encryption
+bootstrap           →  cluster-setup      Main playbook
+localhost.yaml      →  default.yaml       Inventory
+
+
+NEW DIRECTORY STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ansible/
+├── ansible.cfg
+├── inventory/default.yaml
+├── playbooks/cluster-setup.yaml
+└── roles/
+    ├── prep/           {tasks, defaults}/main.yaml
+    ├── cluster/        {tasks, defaults}/main.yaml
+    ├── argocd/         {tasks, defaults}/main.yaml
+    ├── policy/         {tasks, defaults}/main.yaml
+    └── secrets/        {tasks, defaults}/main.yaml
+
+
+HOW TO REORGANIZE (One Command!)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Read guide
+cat ANSIBLE_FILE_NAMES.md
+
+# Reorganize
+make ansible-reorganize
+
+# Verify
+make cluster-up-ansible-check
+
+# Done!
+make cluster-up-ansible
+
+
+TAGS QUICK REFERENCE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# After reorganization:
+cd ansible
+ansible-playbook playbooks/cluster-setup.yaml --tags prep      # Tools
+ansible-playbook playbooks/cluster-setup.yaml --tags cluster   # Cluster
+ansible-playbook playbooks/cluster-setup.yaml --tags policy    # Kyverno
+ansible-playbook playbooks/cluster-setup.yaml --tags secrets   # Encryption
+ansible-playbook playbooks/cluster-setup.yaml --tags argocd    # GitOps
+
+
+MAKE COMMANDS (Before & After)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+make ansible-setup              Install Ansible
+make ansible-reorganize         Reorganize files (NEW!)
+make cluster-up-ansible         Run bootstrap
+make cluster-up-ansible-check   Dry-run
+make ansible-status             Check status
+
+
+DOCUMENTATION ROADMAP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⭐ ANSIBLE_FILE_NAMES.md
+   Quick reference (3 min) - START HERE!
+
+📖 ANSIBLE_REORGANIZATION.md
+   Detailed guide (10 min)
+
+📊 ANSIBLE_REORGANIZATION_SUMMARY.txt
+   Visual summary (5 min)
+
+📝 ANSIBLE_REORGANIZATION_DELIVERY.md
+   Complete delivery summary
+
+
+BEFORE VS AFTER
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+BEFORE (Flat)
+ansible/playbooks/cluster-setup.yaml
+ansible_role_prerequisites_tasks.yaml
+ansible_role_prerequisites_defaults.yaml
+ansible_role_kind_cluster_tasks.yaml
+... (12+ files in root)
+
+AFTER (Organized)
+ansible/playbooks/cluster-setup.yaml
+ansible/roles/prep/tasks/main.yaml
+ansible/roles/prep/defaults/main.yaml
+ansible/roles/cluster/tasks/main.yaml
+... (all in one directory)
+
+
+BENEFITS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Cleaner root
+✓ Standard pattern
+✓ Short names
+✓ Better IDE support
+✓ Easier to extend
+✓ Professional
+✓ Team-friendly
+✓ No functionality loss
+
+
+STATUS CHECK
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+make ansible-status
+
+Shows:
+✓ Ansible installed
+✓ Organized structure detected (if already reorganized)
+  OR
+⚠ Flat structure detected (if not yet reorganized)
+
+
+AUTO-DETECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Makefile automatically detects and uses:
+- ansible/playbooks/cluster-setup.yaml (if organized)
+- ansible_playbook_bootstrap.yaml (if flat)
+
+So commands work with BOTH structures!
+
+
+ROLLBACK (If Needed)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+git checkout HEAD -- .
+
+
+CLEANUP (After Reorganization)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+rm -f ansible_*.yaml ansible.cfg
+rm -f organize-ansible.sh setup-ansible-dirs.sh
+
+
+STEP-BY-STEP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1️⃣  Read guide
+    cat ANSIBLE_FILE_NAMES.md
+
+2️⃣  Reorganize
+    make ansible-reorganize
+
+3️⃣  Verify structure
+    find ansible -type f | sort
+
+4️⃣  Test
+    make cluster-up-ansible-check
+
+5️⃣  Use it
+    make cluster-up-ansible
+
+6️⃣  Commit
+    git add -A && git commit -m "Organize Ansible files"
+
+7️⃣  Cleanup (optional)
+    rm -f ansible_*.yaml
+
+
+═════════════════════════════════════════════════════════════════════════════════
+
+Ready to clean up your Ansible files?
+
+make ansible-reorganize
+
+═════════════════════════════════════════════════════════════════════════════════

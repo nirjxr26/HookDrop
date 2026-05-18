@@ -31,8 +31,35 @@ ci-local:
 cluster-up:
 	bash scripts/setup-cluster.sh
 
+cluster-up-ansible:
+	@command -v ansible-playbook >/dev/null 2>&1 || { echo "Installing Ansible..."; bash setup-ansible.sh; }
+	@source ansible-env/bin/activate 2>/dev/null || true && ansible-playbook ansible/playbooks/cluster-setup.yaml
+
+cluster-up-ansible-check:
+	@command -v ansible-playbook >/dev/null 2>&1 || { echo "Installing Ansible..."; bash setup-ansible.sh; }
+	@source ansible-env/bin/activate 2>/dev/null || true && ansible-playbook ansible/playbooks/cluster-setup.yaml --check
+
 cluster-down:
 	kind delete cluster --name hookdrop
+
+ansible-setup:
+	bash setup-ansible.sh
+
+ansible-reorganize:
+	@echo "Reorganizing Ansible files..."
+	bash reorganize-ansible.sh
+	@echo ""
+	@echo "✅ Reorganization complete!"
+	@echo "Review: cat ANSIBLE_REORGANIZATION.md"
+	@echo "Verify: make cluster-up-ansible-check"
+
+ansible-status:
+	@command -v ansible-playbook >/dev/null 2>&1 && echo "✓ Ansible installed" || echo "✗ Ansible not installed. Run 'make ansible-setup'"
+	@if [ -f ansible/playbooks/cluster-setup.yaml ]; then \
+		echo "✓ Organized structure detected (ansible/playbooks/cluster-setup.yaml)"; \
+	else \
+		echo "⚠ Organized structure not found (expected ansible/playbooks/cluster-setup.yaml)"; \
+	fi
 
 argo-ui:
 	kubectl port-forward svc/argocd-server -n argocd 8081:443

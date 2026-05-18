@@ -1,0 +1,47 @@
+---
+- name: Install Kyverno
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('url', kyverno_manifest_url) }}"
+
+- name: Wait for Kyverno webhook deployment
+  kubernetes.core.k8s_info:
+    kind: Deployment
+    namespace: "{{ kyverno_namespace }}"
+    name: kyverno
+  register: kyverno_deploy
+  until: kyverno_deploy.resources | length > 0 and kyverno_deploy.resources[0].status.readyReplicas | default(0) >= 1
+  retries: 30
+  delay: 10
+
+- name: Wait for ValidatingWebhookConfiguration to be ready
+  kubernetes.core.k8s_info:
+    kind: ValidatingWebhookConfiguration
+  register: webhooks
+  until: webhooks.resources | length > 0
+  retries: 20
+  delay: 5
+
+- name: Apply Kyverno policies
+  kubernetes.core.k8s:
+    state: present
+    definition: "{{ lookup('file', item) }}"
+  loop: "{{ query('fileglob', kyverno_policies_path + '*.yaml') }}"
+  ignore_errors: true
+
+- name: Verify Kyverno policies
+  shell: kubectl get clusterpolicy
+  register: policies_list
+  changed_when: false
+
+- name: Display Kyverno installation info
+  debug:
+    msg: |
+      ✓ Kyverno installed successfully
+      
+      Policies applied:
+      {{ policies_list.stdout }}
+      
+      Policies:
+      - No latest tag: Rejects pods using 'latest' image tag
+      - Require resource limits: Rejects pods without CPU/memory limits

@@ -1,0 +1,10 @@
+.git
+ansible-env/
+ansible-env-wsl/
+bin/
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+*.pyo
+*.log

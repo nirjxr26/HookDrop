@@ -1,0 +1,9 @@
+---
+# Prerequisites role defaults
+docker_required: true
+kubectl_version: "latest"
+helm_version: "latest"
+kind_version: "latest"
+argocd_cli_version: "latest"
+trivy_version: "latest"
+golangci_lint_version: "latest"

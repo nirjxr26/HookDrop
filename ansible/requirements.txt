@@ -1,0 +1,5 @@
+ansible-core>=2.20,<2.21
+kubernetes>=20.0.0
+PyYAML>=5.1
+jinja2>=2.11
+requests>=2.25.1

@@ -1,0 +1,5 @@
+---
+# Kyverno role defaults
+kyverno_namespace: "kyverno"
+kyverno_manifest_url: "https://github.com/kyverno/kyverno/releases/latest/download/install.yaml"
+kyverno_policies_path: "k8s/kyverno/"
