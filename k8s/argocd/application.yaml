@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/nirjxr26/HookDrop
-    targetRevision: HEAD
+    targetRevision: main
     path: helm/hookdrop
     helm:
       valueFiles:

@@ -1,5 +1,0 @@
----
-# ArgoCD role defaults
-argocd_namespace: "argocd"
-argocd_manifest_url: "https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml"
-argocd_port_forward: 8081
