@@ -1,3 +1,29 @@
+# Local env and secret files
+.env
+.env.*.local
+*.secret
+secrets/*
+k8s/**/secrets*.yaml
+
+# Keys and certs
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.pfx
+
+# Build / IDE / OS
 bin/
-*.env
-.env.local
+dist/
+*.log
+.vscode/
+.idea/
+.DS_Store
+.cache/
+
+# Test artifacts
+*.test
+*.test.exe
+coverage.out
+testdata/
