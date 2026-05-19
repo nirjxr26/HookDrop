@@ -1,0 +1,20 @@
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "hookdrop.fullname" . }}
+  labels:
+    {{- include "hookdrop.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "hookdrop.selectorLabels" . | nindent 6 }}
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      interval: {{ .Values.monitoring.serviceMonitor.interval }}
+      path: /healthz
+{{- end }}
+

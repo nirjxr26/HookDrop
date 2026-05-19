@@ -1,0 +1,21 @@
+{{- if .Values.monitoring.prometheusRule.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "hookdrop.fullname" . }}-alerts
+  labels:
+    {{- include "hookdrop.labels" . | nindent 4 }}
+spec:
+  groups:
+    - name: hookdrop.rules
+      rules:
+        - alert: HookdropPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="{{ .Release.Namespace }}",pod=~"{{ include "hookdrop.fullname" . }}.*"}[5m]) > 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "HookDrop pod is restarting"
+            description: "One or more HookDrop pods restarted in the last 5 minutes."
+{{- end }}
+

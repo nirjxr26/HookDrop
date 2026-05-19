@@ -20,3 +20,21 @@ resources:
   limits:
     cpu: 500m
     memory: 256Mi
+
+env:
+  OTEL_SERVICE_NAME: "hookdrop"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.observability.svc.cluster.local:4317"
+
+serviceAccount:
+  automountServiceAccountToken: false
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+  prometheusRule:
+    enabled: true
+    errorRateThreshold: 0.05
+
+networkPolicy:
+  enabled: true
