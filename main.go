@@ -21,6 +21,12 @@ const version = "1.0.0"
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 	configureLogger()
+	otelShutdown := initTelemetry(context.Background())
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = otelShutdown(ctx)
+	}()
 
 	port := getEnv("PORT", "8080")
 	address := ":" + port
@@ -73,6 +79,8 @@ func requestLogger(next http.Handler) http.Handler {
 		}
 		logger := log.Logger.With().Str("trace_id", traceID).Logger()
 		ctx := logger.WithContext(r.Context())
+		ctx, span := startRequestSpan(ctx, r.Method, r.URL.Path, traceID)
+		defer span.End()
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

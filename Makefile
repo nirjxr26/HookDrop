@@ -46,3 +46,19 @@ policy-apply:
 policy-test:
 	kubectl get clusterpolicy
 
+observability-up:
+	bash scripts/setup-observability.sh
+
+observability-down:
+	helm uninstall kube-prometheus-stack -n observability || true
+	helm uninstall loki -n observability || true
+	helm uninstall tempo -n observability || true
+	kubectl delete -f k8s/observability/otel-collector.yaml --ignore-not-found
+	kubectl delete -f k8s/observability/otel-collector-config.yaml --ignore-not-found
+	kubectl delete ns observability --ignore-not-found
+
+platform-up:
+	bash scripts/setup-cluster.sh
+	bash scripts/setup-observability.sh
+	kubectl apply -f k8s/argocd/application.yaml
+

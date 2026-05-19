@@ -34,8 +34,22 @@ hpa:
 env:
   PORT: "8080"
   LOG_LEVEL: "info"
+  OTEL_SERVICE_NAME: "hookdrop"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector.observability.svc.cluster.local:4317"
 
 serviceAccount:
   create: true
   name: ""
   annotations: {}
+  automountServiceAccountToken: false
+
+monitoring:
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+  prometheusRule:
+    enabled: true
+    errorRateThreshold: 0.05
+
+networkPolicy:
+  enabled: true
