@@ -46,6 +46,13 @@ Around the app, the repository includes Helm charts, kind bootstrap scripts, Arg
 - Renovate configuration for dependency updates.
 
 ## CI/CD Architecture
+<div align="center">
+<img 
+  src="./diagrams/Architecture.png" 
+  alt="Pipeline Architecture"
+/>
+</div>
+
 
 **Pipeline overview:**
 - Pushes and pull requests run build, test, lint, and security scans.
