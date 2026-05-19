@@ -46,21 +46,3 @@ policy-apply:
 policy-test:
 	kubectl get clusterpolicy
 
-tekton-apply:
-	kubectl wait --for=condition=available --timeout=300s deployment/tekton-pipelines-controller -n tekton-pipelines
-	kubectl wait --for=condition=available --timeout=300s deployment/tekton-pipelines-webhook -n tekton-pipelines
-	kubectl wait --for=condition=available --timeout=300s deployment/tekton-events-controller -n tekton-pipelines
-	kubectl apply -f k8s/tekton/namespace.yaml
-	kubectl apply -f k8s/tekton/serviceaccount.yaml
-	kubectl apply -f k8s/tekton/tasks.yaml
-	kubectl apply -f k8s/tekton/pipeline.yaml
-
-tekton-run:
-	kubectl create -f k8s/tekton/pipelinerun.yaml
-
-tekton-delete:
-	kubectl delete -f k8s/tekton/pipelinerun.yaml --ignore-not-found
-	kubectl delete -f k8s/tekton/pipeline.yaml --ignore-not-found
-	kubectl delete -f k8s/tekton/tasks.yaml --ignore-not-found
-	kubectl delete -f k8s/tekton/serviceaccount.yaml --ignore-not-found
-	kubectl delete -f k8s/tekton/namespace.yaml --ignore-not-found
