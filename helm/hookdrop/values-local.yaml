@@ -45,10 +45,10 @@ serviceAccount:
 
 monitoring:
   serviceMonitor:
-    enabled: true
+    enabled: false
     interval: 15s
   prometheusRule:
-    enabled: true
+    enabled: false
     errorRateThreshold: 0.05
 
 networkPolicy:

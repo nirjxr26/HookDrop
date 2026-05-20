@@ -13,11 +13,13 @@ helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheu
 
 helm upgrade --install loki grafana/loki \
   -n observability \
-  -f k8s/observability/loki-values.yaml
+  -f k8s/observability/loki-values.yaml \
+  --set loki.useTestSchema=true
 
 helm upgrade --install tempo grafana/tempo \
   -n observability \
-  -f k8s/observability/tempo-values.yaml
+  -f k8s/observability/tempo-values.yaml \
+  --set loki.useTestSchema=true
 
 kubectl apply -f k8s/observability/otel-collector-config.yaml
 kubectl apply -f k8s/observability/otel-collector.yaml
