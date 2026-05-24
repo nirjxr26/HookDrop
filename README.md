@@ -64,7 +64,7 @@ HTTP client
 
 Two trace IDs are in play: the middleware creates a transport-level trace per request; the webhook handler generates a separate per-event trace ID that goes into the stored payload and response. They're related, but not the same value.
 
-### CI/CD Architecture
+## CI/CD Architecture
  
 <div align="center">
 <img
