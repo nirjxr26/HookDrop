@@ -3,112 +3,141 @@
 <h1>HookDrop</h1>
 
 <p>A self-hosted webhook receiver with in-memory event buckets, live SSE streaming, health probes, and a production-style Kubernetes delivery stack.</p>
+
 </div>
 
-## Overview
+---
 
-HookDrop is a lightweight Go service for capturing and replaying webhooks locally or inside Kubernetes. It stores events in memory by bucket, exposes a live Server-Sent Events stream for each bucket, and ships with readiness and liveness endpoints for platform integration.
+## What It Does
 
-Around the app, the repository includes Helm charts, kind bootstrap scripts, ArgoCD sync, Kyverno policies, and observability wiring for Prometheus, Grafana, Loki, Tempo, and OpenTelemetry.
+HookDrop is a small Go service that captures and inspects webhooks. POST to a named bucket, and the event lands in memory with its headers, body, source IP, and a per-event trace ID. GET the bucket to list events. Subscribe to `/stream` and you get a live SSE feed as new webhooks arrive.
+
+Around the app, the repo is also a working example of how to wire a Go service into a real delivery stack — Helm chart, ArgoCD sync, Kyverno admission policies, and a full observability pipeline (Prometheus, Grafana, Loki, Tempo, OpenTelemetry).
+
+---
 
 ## Tech Stack
+ 
+- **Backend** — Go, `net/http`, Zerolog  
+- **Telemetry** — OpenTelemetry, OTLP gRPC exporter  
+- **Container** — Docker, distroless runtime image  
+- **Kubernetes** — Helm, kind, ArgoCD, Kyverno, NetworkPolicy, HPA  
+- **Observability** — Prometheus, Grafana, Loki, Tempo, OTel Collector  
+- **Supply Chain** — Trivy, Cosign, Renovate
+ 
 
-- **Backend:** Go, `net/http`, Zerolog
-- **Telemetry:** OpenTelemetry, OTLP gRPC exporter
-- **Storage:** In-memory event store
-- **Containerization:** Docker, Distroless runtime image
-- **Kubernetes:** Helm, kind, ArgoCD, Kyverno, NetworkPolicy, HPA, ServiceMonitor, PrometheusRule
-- **Observability:** Prometheus, Grafana, Loki, Tempo, OTel Collector
-- **Supply Chain:** Trivy, Cosign, Renovate
+---
 
 ## Features
 
-### Webhook Capture & Replay
-- POST webhooks into named buckets with `POST /h/<bucket-id>`.
-- List captured events with `GET /h/<bucket-id>`.
-- Stream live events with `GET /h/<bucket-id>/stream` using SSE.
-- Keep the latest 50 events per bucket in memory.
+**Webhook capture**
+- `POST /h/<bucket>` — store a webhook event with full headers and body
+- `GET /h/<bucket>` — list stored events (latest 50 per bucket, in memory)
+- `GET /h/<bucket>/stream` — live SSE stream; receives events as they arrive
 
-### Health & Tracing
-- Exposes `/healthz` and `/readyz` for probes and rollout gates.
-- Adds a request trace ID to every request, using `X-Trace-Id` when provided.
-- Emits OpenTelemetry spans for each HTTP request.
+**Health and tracing**
+- `/healthz` and `/readyz` for liveness and readiness probes
+- Every request gets a trace ID (picks up `X-Trace-Id` if provided, generates one otherwise)
+- OpenTelemetry spans emitted per request when `OTEL_EXPORTER_OTLP_ENDPOINT` is set
 
-### Platform Hardening
-- Helm chart with resource requests and limits, HPA, ServiceMonitor, and PrometheusRule.
-- Service account token auto-mounting disabled.
-- NetworkPolicy and Kyverno policies for safer cluster admission.
-- GitOps-friendly ArgoCD application manifests.
+**Platform hardening**
+- Resource limits, HPA, ServiceMonitor, and PrometheusRule in the Helm chart
+- Service account token auto-mount disabled
+- NetworkPolicy scoped to app and ArgoCD namespaces with OTLP egress only
+- Kyverno policy requiring a valid Cosign signature before pods are admitted
 
-### Delivery & Maintenance
-- Local dev, build, test, lint, and scan targets in `Makefile`.
-- Kind bootstrap for local clusters and observability.
-- Renovate configuration for dependency updates.
+---
 
-## CI/CD Architecture
+## Architecture
+
+### Request path
+
+```
+HTTP client
+    └─▶ main.go (ServeMux, requestLogger middleware, OTel span)
+            ├─▶ POST /h/<bucket>   webhook.go → memory.go → SSE subscribers
+            ├─▶ GET  /h/<bucket>   webhook.go ← memory.go
+            ├─▶ GET  /h/<bucket>/stream  webhook.go (SSE fan-out)
+            ├─▶ /healthz /readyz   health.go
+            └─▶ /                  dashboard.go (static route listing)
+```
+
+Two trace IDs are in play: the middleware creates a transport-level trace per request; the webhook handler generates a separate per-event trace ID that goes into the stored payload and response. They're related, but not the same value.
+
+### CI/CD Architecture
+ 
 <div align="center">
-<img 
-  src="./diagrams/Architecture.png" 
+<img
+  src="./diagrams/hookdrop_architecture.png"
   alt="Pipeline Architecture"
 />
 </div>
 
+### Pipeline Overview — from code push to running pod
 
-**Pipeline overview:**
-- Pushes and pull requests run build, test, lint, and security scans.
-- Container images are built and published for deployment.
-- Helm values are updated for the deployed image tag.
-- ArgoCD syncs the cluster from Git.
-- Prometheus scrapes app metrics and the OTel Collector forwards traces to Tempo.
+- Push or PR to `main` triggers `ci.yml`, which sets up Go 1.25.10, restores the module cache, compiles the binary, runs `go test -race`, and gates on `golangci-lint`.
+- Trivy scans both the container image and the Helm chart configuration for CVEs before anything is pushed.
+- On merge to `main`, CI configures AWS credentials, creates the ECR repository if it doesn't exist, builds the multi-stage Docker image (Alpine builder → distroless runtime), and pushes it to ECR tagged by commit SHA.
+- Cosign signs the image keylessly against Sigstore immediately after push.
+- *(Gap — not yet automated)* `reusable-build.yml` knows how to commit the updated image tag back into `helm/hookdrop/values.yaml` and push it to the deploy branch, which would close the GitOps loop. Nothing in the active CI calls it yet, so tag promotion is currently manual.
+- ArgoCD watches the deploy branch, detects the updated Helm values, and syncs the `hookdrop` namespace automatically.
+- Before the pod is admitted, the Kyverno admission webhook verifies the Cosign signature on the image. Unsigned images are rejected at the cluster boundary.
+- Pod starts; if `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the OTel collector receives traces over gRPC and forwards them to Tempo.
 
-Full platform entrypoints:
-- [Helm chart](./helm/hookdrop/Chart.yaml)
-- [ArgoCD application](./k8s/argocd/application.yaml)
-- [OpenTelemetry collector config](./k8s/observability/otel-collector-config.yaml)
-- [Kyverno signature policy](./k8s/kyverno/verify-cosign-signature.yaml)
 
+
+
+### Kubernetes and GitOps
+ 
+```
+setup-cluster.sh
+    ├─▶ kind cluster (kind-config.yaml)
+    ├─▶ ArgoCD install
+    ├─▶ Kyverno install + policies
+    └─▶ kubectl apply application.yaml
+            └─▶ ArgoCD syncs helm/hookdrop → hookdrop namespace
+ 
+setup-observability.sh
+    ├─▶ kube-prometheus-stack (Prometheus + Grafana + Alertmanager)
+    ├─▶ Loki
+    ├─▶ Tempo
+    └─▶ OTel Collector (OTLP 4317/4318 → forwards traces to Tempo)
+```
+ 
+The ArgoCD application uses `values-local.yaml` by default. Prod uses `values-prod.yaml` (different registry, ingress config).
+ 
+The Helm chart ships a ServiceMonitor and a PrometheusRule, but the app has no `/metrics` endpoint. The ServiceMonitor scrapes `/healthz`. The PrometheusRule alerts on pod restarts. Custom app metrics aren't implemented yet.
+ 
 ---
-
 ## Quick Start
 
 ### Prerequisites
 
-Clone the repo first:
+- Go, Docker, kind, kubectl, Helm
 
 ```bash
 git clone https://github.com/nirjxr26/HookDrop.git
 cd HookDrop
 ```
 
-## Option 1 - Local Go Development
-
-Requires Go, Docker, kind, kubectl, and Helm if you want the Kubernetes stack.
+### Option 1 — Local Go
 
 ```bash
-make dev
-```
-
-Useful commands:
-
-```bash
+make dev          # run the server on :8080
 make build
 make test
 make lint
 make scan
 ```
 
-The app listens on `:8080` by default.
-
-## Option 2 - Docker
-
-Build the image and run it locally:
+### Option 2 — Docker
 
 ```bash
 make docker-build
 make docker-run
 ```
 
-## Option 3 - Kubernetes with kind
+### Option 3 — Kubernetes with kind
 
 ```bash
 make cluster-up
@@ -119,9 +148,7 @@ kubectl apply -f k8s/argocd/application.yaml
 kubectl get pods -n hookdrop -w
 ```
 
-The service is exposed through the Helm release in the `hookdrop` namespace.
-
-### Access the cluster UIs
+**Port-forward to access cluster UIs:**
 
 ```bash
 # ArgoCD
@@ -137,18 +164,22 @@ kubectl port-forward -n observability svc/kube-prometheus-stack-prometheus 9090:
 kubectl port-forward -n observability svc/kube-prometheus-stack-alertmanager 9093:9093
 ```
 
-### Verify the app
+**Verify the app:**
 
 ```bash
 kubectl port-forward svc/hookdrop-hookdrop -n hookdrop 8080:80
-curl -X POST http://localhost:8080/h/test -H "Content-Type: application/json" -d '{"hello":"world"}'
+
+curl -X POST http://localhost:8080/h/test \
+  -H "Content-Type: application/json" \
+  -d '{"hello":"world"}'
+
 curl http://localhost:8080/h/test
 curl http://localhost:8080/h/test/stream
 ```
 
-## Environment Variables
+---
 
-The application reads the following variables:
+## Environment Variables
 
 ```env
 PORT=8080
@@ -157,34 +188,37 @@ OTEL_SERVICE_NAME=hookdrop
 OTEL_EXPORTER_OTLP_ENDPOINT=otel-collector.observability.svc.cluster.local:4317
 ```
 
+OTEL tracing is a no-op if `OTEL_EXPORTER_OTLP_ENDPOINT` is not set.
+
+---
+
 ## Project Structure
 
 ```text
-├── main.go                # HTTP server, routing, graceful shutdown
-├── telemetry.go           # OpenTelemetry bootstrap and request spans
-├── handler/               # Health, dashboard, and webhook handlers
-├── store/                 # In-memory bucket store and pub/sub fanout
-├── helm/hookdrop/         # Helm chart for deployment and monitoring
-├── k8s/                   # ArgoCD, Kyverno, and observability manifests
-├── scripts/               # Cluster and observability bootstrap scripts
-├── Dockerfile             # Multi-stage build with distroless runtime
-├── docker-compose.yml     # Local container workflow
-└── kind-config.yaml       # Local kind cluster configuration
+├── main.go                       # HTTP server, routing, graceful shutdown
+├── telemetry.go                  # OTel bootstrap and request span middleware
+├── handler/
+│   ├── webhook.go                # POST/GET/SSE for bucket events
+│   ├── health.go                 # /healthz and /readyz
+│   └── dashboard.go              # static route listing at /
+├── store/
+│   └── memory.go                 # in-memory store with SSE fan-out (50 events/bucket)
+├── helm/hookdrop/                # Helm chart (Deployment, Service, NetworkPolicy, monitoring)
+├── k8s/
+│   ├── argocd/application.yaml   # ArgoCD app pointing at the Helm chart
+│   ├── kyverno/                  # Cosign signature enforcement
+│   └── observability/            # OTel collector, Loki, Tempo configs
+├── scripts/
+│   ├── setup-cluster.sh          # kind + ArgoCD + Kyverno bootstrap
+│   └── setup-observability.sh    # Prometheus stack + Loki + Tempo
+├── Dockerfile                    # multi-stage: Alpine builder → distroless runtime
+├── docker-compose.yml
+└── kind-config.yaml
 ```
 
-## Documentation
-
-| Topic | Link |
-|---|---|
-| Helm chart | [helm/hookdrop/Chart.yaml](./helm/hookdrop/Chart.yaml) |
-| ArgoCD app | [k8s/argocd/application.yaml](./k8s/argocd/application.yaml) |
-| OTel collector | [k8s/observability/otel-collector-config.yaml](./k8s/observability/otel-collector-config.yaml) |
-| Kyverno policies | [k8s/kyverno/](./k8s/kyverno/) |
-| Cluster setup | [scripts/setup-cluster.sh](./scripts/setup-cluster.sh) |
-| Observability setup | [scripts/setup-observability.sh](./scripts/setup-observability.sh) |
+---
 
 ## Notes
 
-- Event storage is in memory, so captured webhook data is ephemeral.
-- The SSE stream keeps connections open and sends keepalive comments periodically.
-- The dashboard at `/` is a simple built-in status page, not a separate frontend app.
+- Events are in memory. A pod restart clears everything.
+- SSE connections receive periodic keepalive comments so they survive proxies and load balancers that close idle connections.

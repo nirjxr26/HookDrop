@@ -21,6 +21,7 @@ dist/
 .idea/
 .DS_Store
 .cache/
+temp.json
 
 # Test artifacts
 *.test

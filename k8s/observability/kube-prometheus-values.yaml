@@ -1,5 +1,4 @@
 grafana:
-  adminPassword: admin123
   service:
     type: ClusterIP
   replicas: 1
