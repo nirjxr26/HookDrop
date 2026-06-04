@@ -205,6 +205,5 @@ Every request gets a trace ID. The middleware picks up `X-Trace-Id` if provided,
 
 ## Limitations
 
-- Events are stored in memory. A pod restart clears everything.
-- SSE connections send periodic keepalive comments to survive proxies and load balancers that close idle connections.
-- The GitOps loop isn't fully closed — image tag promotion to the deploy branch is currently manual (see pipeline step 5 above).
+- Events are in memory. A pod restart clears everything.
+- SSE connections receive periodic keepalive comments so they survive proxies and load balancers that close idle connections.
