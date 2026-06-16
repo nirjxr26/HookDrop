@@ -36,19 +36,20 @@ func (h *WebhookHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		bucketID = path[:idx]
 	}
 
+	isStream := r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/stream")
+	isList := r.Method == http.MethodGet && !strings.HasSuffix(r.URL.Path, "/stream") && r.URL.Query().Get("ingest") != "true" && r.Header.Get("X-Ingest") != "true"
+
 	switch {
-	case r.Method == http.MethodPost && !strings.HasSuffix(r.URL.Path, "/stream"):
-		h.handlePost(w, r, bucketID)
-	case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/stream"):
+	case isStream:
 		h.handleStream(w, r, bucketID)
-	case r.Method == http.MethodGet:
+	case isList:
 		h.handleList(w, r, bucketID)
 	default:
-		http.NotFound(w, r)
+		h.handleIngest(w, r, bucketID)
 	}
 }
 
-func (h *WebhookHandler) handlePost(w http.ResponseWriter, r *http.Request, bucketID string) {
+func (h *WebhookHandler) handleIngest(w http.ResponseWriter, r *http.Request, bucketID string) {
 	traceID := uuid.NewString()
 	ctx := withTraceLogger(r.Context(), traceID)
 	logger := zerolog.Ctx(ctx)
@@ -58,6 +59,22 @@ func (h *WebhookHandler) handlePost(w http.ResponseWriter, r *http.Request, buck
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unable to read body"})
 		logger.Error().Err(err).Str("bucket_id", bucketID).Msg("failed to read webhook body")
 		return
+	}
+
+	// For GET webhooks, serialize query parameters as JSON if body is empty
+	if r.Method == http.MethodGet && body == "" && r.URL.RawQuery != "" {
+		params := r.URL.Query()
+		m := make(map[string]string)
+		for k, v := range params {
+			if k != "ingest" {
+				m[k] = strings.Join(v, ",")
+			}
+		}
+		if len(m) > 0 {
+			if jsonBytes, err := json.Marshal(m); err == nil {
+				body = string(jsonBytes)
+			}
+		}
 	}
 
 	event := store.WebhookEvent{
@@ -75,7 +92,6 @@ func (h *WebhookHandler) handlePost(w http.ResponseWriter, r *http.Request, buck
 
 	writeJSON(w, http.StatusOK, map[string]string{"trace_id": traceID, "status": "received"})
 }
-
 
 func (h *WebhookHandler) handleList(w http.ResponseWriter, r *http.Request, bucketID string) {
 	zerolog.Ctx(r.Context()).Info().Str("bucket_id", bucketID).Msg("webhook bucket listed")

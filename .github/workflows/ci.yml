@@ -53,6 +53,14 @@ jobs:
           install-mode: goinstall
           skip-cache: true
 
+      - name: Datadog Static Analysis
+        uses: DataDog/datadog-static-analysis-github-action@v1
+        with:
+          dd_api_key: ${{ secrets.DD_API_KEY }}
+          dd_app_key: ${{ secrets.DD_APP_KEY }}
+          dd_service: ${{ env.ECR_REPOSITORY }}
+          dd_site: datadoghq.com
+
       - name: Configure AWS credentials
         if: github.event_name == 'push'
         uses: aws-actions/configure-aws-credentials@v4
