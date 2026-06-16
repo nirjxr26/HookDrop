@@ -32,6 +32,7 @@ func main() {
 	address := ":" + port
 
 	webhookStore := store.New()
+	seedMockData(webhookStore)
 	webhookHandler := handler.NewWebhookHandler(webhookStore)
 	dashboardHandler := handler.NewDashboardHandler()
 
