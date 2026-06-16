@@ -6,8 +6,13 @@ import (
 )
 
 func TestGetEnv(t *testing.T) {
-	os.Setenv("TEST_ENV_VAR", "hello")
-	defer os.Unsetenv("TEST_ENV_VAR")
+	err := os.Setenv("TEST_ENV_VAR", "hello")
+	if err != nil {
+		t.Fatalf("failed to set env: %v", err)
+	}
+	defer func() {
+		_ = os.Unsetenv("TEST_ENV_VAR")
+	}()
 
 	val := getEnv("TEST_ENV_VAR", "default")
 	if val != "hello" {
