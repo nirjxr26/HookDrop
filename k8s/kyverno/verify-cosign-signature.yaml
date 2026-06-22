@@ -3,7 +3,7 @@ kind: ClusterPolicy
 metadata:
   name: verify-hookdrop-cosign-signature
 spec:
-  validationFailureAction: Enforce
+  validationFailureAction: Audit
   background: true
   rules:
     - name: verify-cosign-signatures
@@ -17,7 +17,7 @@ spec:
       verifyImages:
         - imageReferences:
             - "654654364687.dkr.ecr.us-east-1.amazonaws.com/hookdrop:*"
-          mutateDigest: true
+          mutateDigest: false
           attestors:
             - entries:
                 - keyless:

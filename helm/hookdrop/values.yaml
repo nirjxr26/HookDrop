@@ -7,6 +7,14 @@ image:
 
 imagePullSecrets: []
 
+ecrRefresher:
+  enabled: false
+  schedule: "0 */8 * * *"
+  region: "us-east-1"
+  registry: "654654364687.dkr.ecr.us-east-1.amazonaws.com"
+  secretName: "ecr-key"
+  awsCredentialsSecret: "aws-credentials"
+
 service:
   type: ClusterIP
   port: 80

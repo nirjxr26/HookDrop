@@ -3,8 +3,12 @@
 
 set -euo pipefail
 
-# Create kind cluster
-kind create cluster --config k8s/kind/cluster.yaml
+# Verify current Kubernetes context is docker-desktop
+CURRENT_CONTEXT=$(kubectl config current-context)
+if [ "$CURRENT_CONTEXT" != "docker-desktop" ]; then
+  echo "Error: Current Kubernetes context is '$CURRENT_CONTEXT'. Please switch to 'docker-desktop' first."
+  exit 1
+fi
 
 # Create ArgoCD namespace if missing
 kubectl create namespace argocd --dry-run=client -o yaml | kubectl apply -f -
@@ -57,6 +61,6 @@ echo "Run this manually to access ArgoCD:"
 echo "kubectl port-forward svc/argocd-server -n argocd 8081:443"
 echo
 echo "Open:"
-echo "https://localhost:12345"
+echo "https://localhost:8081"
 echo
 echo "Username: admin"

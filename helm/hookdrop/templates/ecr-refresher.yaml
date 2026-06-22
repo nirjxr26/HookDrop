@@ -1,0 +1,81 @@
+{{- if .Values.ecrRefresher.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ecr-refresher
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ecr-refresher-role
+  namespace: {{ .Release.Namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ecr-refresher-rolebinding
+  namespace: {{ .Release.Namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: ecr-refresher
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: ecr-refresher-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ecr-registry-refresher
+  namespace: {{ .Release.Namespace }}
+spec:
+  schedule: "{{ .Values.ecrRefresher.schedule }}"
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: ecr-registry-refresher
+        spec:
+          serviceAccountName: ecr-refresher
+          restartPolicy: OnFailure
+          containers:
+            - name: refresher
+              image: alpine:3.19
+              command:
+                - sh
+                - -c
+                - |
+                  set -euo pipefail
+                  echo "Installing aws-cli and kubectl..."
+                  apk add --no-cache aws-cli kubectl
+
+                  echo "Fetching ECR token..."
+                  TOKEN=$(aws ecr get-login-password --region {{ .Values.ecrRefresher.region }})
+
+                  echo "Updating {{ .Values.ecrRefresher.secretName }} secret in {{ .Release.Namespace }} namespace..."
+                  kubectl create secret docker-registry {{ .Values.ecrRefresher.secretName }} \
+                    --docker-server={{ .Values.ecrRefresher.registry }} \
+                    --docker-username=AWS \
+                    --docker-password="$TOKEN" \
+                    --dry-run=client -o yaml | kubectl apply -f -
+
+                  echo "ECR credentials successfully refreshed."
+              volumeMounts:
+                - name: aws-creds
+                  mountPath: /root/.aws
+                  readOnly: true
+          volumes:
+            - name: aws-creds
+              secret:
+                secretName: {{ .Values.ecrRefresher.awsCredentialsSecret }}
+{{- end }}

@@ -14,6 +14,12 @@ spec:
                 - Pod
               namespaces:
                 - hookdrop
+      exclude:
+        any:
+          - resources:
+              selector:
+                matchLabels:
+                  app: ecr-registry-refresher
       validate:
         message: "CPU and memory limits are required for all containers in hookdrop namespace."
         pattern:

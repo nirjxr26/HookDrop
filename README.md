@@ -44,7 +44,7 @@ The app itself is small. The repo is also a working reference for how to wire a 
 | Backend | Go, `net/http`, Zerolog |
 | Telemetry | OpenTelemetry, OTLP gRPC exporter |
 | Container | Docker, distroless runtime image |
-| Kubernetes | Helm, kind, ArgoCD, Kyverno, NetworkPolicy, HPA |
+| Kubernetes | Helm, Docker Desktop, ArgoCD, Kyverno, NetworkPolicy, HPA |
 | Observability | Prometheus, Grafana, Loki, Tempo, OTel Collector |
 | Supply Chain | Trivy, Cosign, Renovate |
 
@@ -77,7 +77,7 @@ From code push to running pod:
  
 ### Cluster Bootstrap
 
-- `setup-cluster.sh` provisions the local Kubernetes environment using Kind, installs ArgoCD for GitOps deployments, applies Kyverno admission policies, and synchronizes the HookDrop application into the `hookdrop` namespace.
+- `setup-cluster.sh` (or `setup-cluster.ps1` on Windows) validates the active `docker-desktop` context, installs ArgoCD for GitOps deployments, applies Kyverno admission policies, and synchronizes the HookDrop application into the `hookdrop` namespace.
 
 ### Observability Stack
 
@@ -91,7 +91,7 @@ From code push to running pod:
 
 ## Quick Start
 
-**Prerequisites:** Go, Docker, kind, kubectl, Helm
+**Prerequisites:** Go, Docker (with Kubernetes enabled), kubectl, Helm
 
 ```bash
 git clone https://github.com/nirjxr26/HookDrop.git
@@ -115,15 +115,23 @@ make docker-build
 make docker-run
 ```
 
-### Option 3 — Kubernetes (kind)
+### Option 3 — Kubernetes (Docker Desktop)
 
+1. Ensure Kubernetes is enabled in Docker Desktop and set it as your current context:
 ```bash
+kubectl config use-context docker-desktop
+```
+
+2. Build the local image and deploy the stack:
+```bash
+make docker-build
 make cluster-up
 make observability-up
-make docker-build
+```
+*Note: Since Docker Desktop Kubernetes directly accesses the local host Docker daemon, there is no need to load the image.*
 
-kind load docker-image hookdrop:local --name hookdrop
-kubectl apply -f k8s/argocd/application.yaml
+3. Monitor the deployment:
+```bash
 kubectl get pods -n hookdrop -w
 ```
 

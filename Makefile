@@ -32,7 +32,8 @@ cluster-up:
 	bash scripts/setup-cluster.sh
 
 cluster-down:
-	kind delete cluster --name hookdrop
+	kubectl delete -f k8s/argocd/application.yaml --ignore-not-found || true
+	kubectl delete ns hookdrop argocd kyverno observability --ignore-not-found || true
 
 argo-ui:
 	kubectl port-forward svc/argocd-server -n argocd 8081:443
