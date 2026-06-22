@@ -28,3 +28,6 @@ temp.json
 *.test.exe
 coverage.out
 testdata/
+
+# Preview files
+preview_dashboard.html

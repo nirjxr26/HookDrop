@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -32,6 +34,7 @@ func main() {
 	address := ":" + port
 
 	webhookStore := store.New()
+	seedMockData(webhookStore)
 	webhookHandler := handler.NewWebhookHandler(webhookStore)
 	dashboardHandler := handler.NewDashboardHandler()
 
@@ -39,6 +42,7 @@ func main() {
 	mux.Handle("/healthz", requestLogger(http.HandlerFunc(handler.Healthz)))
 	mux.Handle("/readyz", requestLogger(http.HandlerFunc(handler.Readyz)))
 	mux.Handle("/h/", requestLogger(webhookHandler))
+	mux.HandleFunc("/logs/stream", handleLogStream)
 	mux.Handle("/", requestLogger(dashboardHandler))
 
 	server := &http.Server{
@@ -92,7 +96,7 @@ func configureLogger() {
 		parsedLevel = zerolog.InfoLevel
 	}
 	zerolog.SetGlobalLevel(parsedLevel)
-	log.Logger = zerolog.New(os.Stdout).With().Timestamp().Logger()
+	log.Logger = zerolog.New(globalLogBroker).With().Timestamp().Logger()
 }
 
 func getEnv(key, fallback string) string {
@@ -101,5 +105,78 @@ func getEnv(key, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+type LogBroker struct {
+	mu          sync.Mutex
+	subscribers map[chan string]bool
+}
+
+var globalLogBroker = &LogBroker{
+	subscribers: make(map[chan string]bool),
+}
+
+func (b *LogBroker) Write(p []byte) (n int, err error) {
+	n, err = os.Stdout.Write(p)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	msg := string(p)
+	for ch := range b.subscribers {
+		select {
+		case ch <- msg:
+		default:
+		}
+	}
+	return
+}
+
+func (b *LogBroker) Subscribe() chan string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	ch := make(chan string, 100)
+	b.subscribers[ch] = true
+	return ch
+}
+
+func (b *LogBroker) Unsubscribe(ch chan string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	delete(b.subscribers, ch)
+	close(ch)
+}
+
+func handleLogStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
+	ctx := r.Context()
+	ch := globalLogBroker.Subscribe()
+	defer globalLogBroker.Unsubscribe(ch)
+
+	// Keep-alive ticker
+	keepAlive := time.NewTicker(15 * time.Second)
+	defer keepAlive.Stop()
+
+	flusher.Flush()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-ch:
+			_, _ = fmt.Fprintf(w, "data: %s\n\n", msg)
+			flusher.Flush()
+		case <-keepAlive.C:
+			_, _ = w.Write([]byte(": keepalive\n\n"))
+			flusher.Flush()
+		}
+	}
 }
 

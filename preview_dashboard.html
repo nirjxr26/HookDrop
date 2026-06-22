@@ -1,21 +1,4 @@
-package handler
-
-import (
-	"net/http"
-
-	"github.com/rs/zerolog"
-)
-
-type DashboardHandler struct{}
-
-func NewDashboardHandler() *DashboardHandler {
-	return &DashboardHandler{}
-}
-
-func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	zerolog.Ctx(r.Context()).Info().Msg("dashboard requested")
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	_, _ = w.Write([]byte(`<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -1680,5 +1663,4 @@ func (h *DashboardHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
     }
   </script>
 </body>
-</html>`))
-}
+</html>
