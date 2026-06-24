@@ -6,7 +6,7 @@ set -euo pipefail
 # Verify current Kubernetes context is docker-desktop
 CURRENT_CONTEXT=$(kubectl config current-context)
 if [ "$CURRENT_CONTEXT" != "docker-desktop" ]; then
-  echo "Error: Current Kubernetes context is '$CURRENT_CONTEXT'. Please switch to 'docker-desktop' first."
+  echo "Error: Current Kubernetes context is '$CURRENT_CONTEXT'. Please switch to 'docker-desktop' first." >&2
   exit 1
 fi
 

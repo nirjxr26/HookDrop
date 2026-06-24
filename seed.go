@@ -18,6 +18,13 @@ const (
 	mockGitHubIP2 = "140.82.115.2"
 	// mockAuth0IP represents a mock client IP address for Auth0 webhook seed events.
 	mockAuth0IP   = "54.221.18.44"
+
+	// headerContentType is the HTTP header key for content type.
+	headerContentType = "Content-Type"
+	// headerUserAgent is the HTTP header key for user agent.
+	headerUserAgent = "User-Agent"
+	// contentTypeJSON is the MIME type for JSON data.
+	contentTypeJSON = "application/json"
 )
 
 func seedMockData(s *store.Store) {
@@ -31,8 +38,8 @@ func seedMockData(s *store.Store) {
 		SourceIP:  mockStripeIP1,
 		Timestamp: now.Add(-2 * time.Minute),
 		Headers: map[string][]string{
-			"Content-Type":     {"application/json"},
-			"User-Agent":       {"Stripe/1.0 (+https://stripe.com/docs/webhooks)"},
+			headerContentType: {contentTypeJSON},
+			headerUserAgent:   {"Stripe/1.0 (+https://stripe.com/docs/webhooks)"},
 			"Stripe-Signature": {"t=1718536800,v1=9fa8db31c26ebef8781a7b8e1a7b8e1a7b8e1a7b8e1a7b8e1a7b8e1a7b8e1a7b"},
 		},
 		Body: `{
@@ -77,8 +84,8 @@ func seedMockData(s *store.Store) {
 		SourceIP:  mockStripeIP2,
 		Timestamp: now.Add(-15 * time.Minute),
 		Headers: map[string][]string{
-			"Content-Type":     {"application/json"},
-			"User-Agent":       {"Stripe/1.0 (+https://stripe.com/docs/webhooks)"},
+			headerContentType: {contentTypeJSON},
+			headerUserAgent:   {"Stripe/1.0 (+https://stripe.com/docs/webhooks)"},
 			"Stripe-Signature": {"t=1718536000,v1=a1b2c3d4e5f6g7h8i9j0a1b2c3d4e5f6g7h8i9j0a1b2c3d4e5f6g7h8i9j0a1b2"},
 		},
 		Body: `{
@@ -123,8 +130,8 @@ func seedMockData(s *store.Store) {
 		SourceIP:  mockGitHubIP1,
 		Timestamp: now.Add(-5 * time.Minute),
 		Headers: map[string][]string{
-			"Content-Type":          {"application/json"},
-			"User-Agent":            {"GitHub-Hookshot/7a82fb"},
+			headerContentType:       {contentTypeJSON},
+			headerUserAgent:         {"GitHub-Hookshot/7a82fb"},
 			"X-GitHub-Event":        {"push"},
 			"X-GitHub-Delivery":     {"d8a2f64c-bcae-11ee-8e8e-c34d399634d3"},
 			"X-Hub-Signature-256":   {"sha256=1bc2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2"},
@@ -169,8 +176,8 @@ func seedMockData(s *store.Store) {
 		SourceIP:  mockGitHubIP2,
 		Timestamp: now.Add(-30 * time.Minute),
 		Headers: map[string][]string{
-			"Content-Type":          {"application/json"},
-			"User-Agent":            {"GitHub-Hookshot/7a82fb"},
+			headerContentType:       {contentTypeJSON},
+			headerUserAgent:         {"GitHub-Hookshot/7a82fb"},
 			"X-GitHub-Event":        {"pull_request"},
 			"X-GitHub-Delivery":     {"e9b3f75d-cdaf-11ee-8e8e-d45e400745e4"},
 			"X-Hub-Signature-256":   {"sha256=2cd3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3"},
@@ -206,8 +213,8 @@ func seedMockData(s *store.Store) {
 		SourceIP:  mockAuth0IP,
 		Timestamp: now.Add(-8 * time.Minute),
 		Headers: map[string][]string{
-			"Content-Type":     {"application/json"},
-			"User-Agent":       {"Auth0-Hook-Worker"},
+			headerContentType: {contentTypeJSON},
+			headerUserAgent:   {"Auth0-Hook-Worker"},
 			"X-Auth0-Event-Id": {"evt_auth0_987452"},
 		},
 		Body: `{
@@ -238,8 +245,8 @@ func seedMockData(s *store.Store) {
 		SourceIP:  "127.0.0.1",
 		Timestamp: now.Add(-10 * time.Second),
 		Headers: map[string][]string{
-			"Content-Type": {"application/json"},
-			"User-Agent":   {"curl/8.4.0"},
+			headerContentType: {contentTypeJSON},
+			headerUserAgent:   {"curl/8.4.0"},
 		},
 		Body: `{
   "message": "Welcome to HookDrop! Send any payload to this endpoint to test."
