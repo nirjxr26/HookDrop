@@ -37,17 +37,17 @@ jobs:
       ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ inputs.aws_region }}.amazonaws.com
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
       - name: Set up Go 1.25.10
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@f111f3307d8850f501ac008e886eec1fd1932a34 # v5.3.0
         with:
           go-version: "1.25.10"
 
       - name: Cache Go modules
-        uses: actions/cache@v4
+        uses: actions/cache@1bd1e32a3bdc45062d1976a16315570220621146 # v4.2.0
         with:
           path: |
             ~/.cache/go-build
@@ -63,7 +63,7 @@ jobs:
         run: go test -race ./...
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v7
+        uses: golangci/golangci-lint-action@351a857106093478950f9686035f524c9c1b3f95 # v7.0.1
         with:
           version: v2.1.6
           install-mode: goinstall
@@ -71,7 +71,7 @@ jobs:
 
       - name: Configure AWS credentials
         if: inputs.publish
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@0e34b13009945a5574576307736630043817f54c # v4.0.2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
@@ -85,13 +85,13 @@ jobs:
       - name: Login to Amazon ECR
         id: login-ecr
         if: inputs.publish
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@062b18f4a13f69572620f3299719468088924b27 # v2.0.1
 
       - name: Build Docker image
         run: docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@57a97c7e997f9e5ec466dc7e3661eb14376b3cfb # v0.35.0
         with:
           image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           format: table
@@ -100,7 +100,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Trivy config scan
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@57a97c7e997f9e5ec466dc7e3661eb14376b3cfb # v0.35.0
         with:
           scan-type: config
           scan-ref: ./helm
@@ -113,7 +113,7 @@ jobs:
 
       - name: Install Cosign
         if: inputs.publish
-        uses: sigstore/cosign-installer@v3.6.0
+        uses: sigstore/cosign-installer@dc72c7d5c4d10cd6bcb8cf6e3fd625a9e5e537da # v3.7.0
 
       - name: Sign image with Cosign (keyless)
         if: inputs.publish

@@ -7,6 +7,19 @@ import (
 	"github.com/your-username/hookdrop/store"
 )
 
+const (
+	// mockStripeIP1 represents a mock client IP address for Stripe webhook seed events.
+	mockStripeIP1 = "3.18.12.1"
+	// mockStripeIP2 represents a mock client IP address for Stripe webhook seed events.
+	mockStripeIP2 = "3.18.12.2"
+	// mockGitHubIP1 represents a mock client IP address for GitHub webhook seed events.
+	mockGitHubIP1 = "140.82.115.1"
+	// mockGitHubIP2 represents a mock client IP address for GitHub webhook seed events.
+	mockGitHubIP2 = "140.82.115.2"
+	// mockAuth0IP represents a mock client IP address for Auth0 webhook seed events.
+	mockAuth0IP   = "54.221.18.44"
+)
+
 func seedMockData(s *store.Store) {
 	now := time.Now().UTC()
 
@@ -15,7 +28,7 @@ func seedMockData(s *store.Store) {
 		TraceID:   uuid.NewString(),
 		BucketID:  "stripe",
 		Method:    "POST",
-		SourceIP:  "3.18.12.1",
+		SourceIP:  mockStripeIP1,
 		Timestamp: now.Add(-2 * time.Minute),
 		Headers: map[string][]string{
 			"Content-Type":     {"application/json"},
@@ -61,7 +74,7 @@ func seedMockData(s *store.Store) {
 		TraceID:   uuid.NewString(),
 		BucketID:  "stripe",
 		Method:    "POST",
-		SourceIP:  "3.18.12.2",
+		SourceIP:  mockStripeIP2,
 		Timestamp: now.Add(-15 * time.Minute),
 		Headers: map[string][]string{
 			"Content-Type":     {"application/json"},
@@ -107,7 +120,7 @@ func seedMockData(s *store.Store) {
 		TraceID:   uuid.NewString(),
 		BucketID:  "github",
 		Method:    "POST",
-		SourceIP:  "140.82.115.1",
+		SourceIP:  mockGitHubIP1,
 		Timestamp: now.Add(-5 * time.Minute),
 		Headers: map[string][]string{
 			"Content-Type":          {"application/json"},
@@ -153,7 +166,7 @@ func seedMockData(s *store.Store) {
 		TraceID:   uuid.NewString(),
 		BucketID:  "github",
 		Method:    "POST",
-		SourceIP:  "140.82.115.2",
+		SourceIP:  mockGitHubIP2,
 		Timestamp: now.Add(-30 * time.Minute),
 		Headers: map[string][]string{
 			"Content-Type":          {"application/json"},
@@ -190,7 +203,7 @@ func seedMockData(s *store.Store) {
 		TraceID:   uuid.NewString(),
 		BucketID:  "auth0",
 		Method:    "POST",
-		SourceIP:  "54.221.18.44",
+		SourceIP:  mockAuth0IP,
 		Timestamp: now.Add(-8 * time.Minute),
 		Headers: map[string][]string{
 			"Content-Type":     {"application/json"},

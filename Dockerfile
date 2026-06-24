@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 RUN go build -ldflags="-s -w" -o /app/hookdrop .
 
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/static-debian12:latest
 
 COPY --from=builder /app/hookdrop /hookdrop
 COPY --from=builder /etc/passwd /etc/passwd
