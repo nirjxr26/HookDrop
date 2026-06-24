@@ -31,3 +31,4 @@ testdata/
 
 # Preview files
 preview_dashboard.html
+.agents/

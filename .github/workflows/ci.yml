@@ -37,7 +37,7 @@ jobs:
         run: go test -race ./...
 
       - name: Lint
-        uses: golangci/golangci-lint-action@351a857106093478950f9686035f524c9c1b3f95 # v7.0.1
+        uses: golangci/golangci-lint-action@aaa42aa0628b4ae2578232a66b541047968fac86 # v6.1.0
         with:
           version: v2.1.6
           install-mode: goinstall
@@ -45,7 +45,7 @@ jobs:
 
       - name: Datadog Static Analysis
         if: github.event_name == 'push'
-        uses: DataDog/datadog-static-analyzer-github-action@8340f18 # v3.0.0
+        uses: DataDog/datadog-static-analyzer-github-action@8340f18875fcefca86844b5f947ce2431387e552 # v3.0.0
         with:
           dd_api_key: ${{ secrets.DD_API_KEY }}
           dd_app_key: ${{ secrets.DD_APP_KEY }}
@@ -53,7 +53,7 @@ jobs:
 
       - name: Configure AWS credentials
         if: github.event_name == 'push'
-        uses: aws-actions/configure-aws-credentials@0e34b13009945a5574576307736630043817f54c # v4.0.2
+        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v4.0.2
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
@@ -67,13 +67,13 @@ jobs:
       - name: Login to Amazon ECR
         if: github.event_name == 'push'
         id: login-ecr
-        uses: aws-actions/amazon-ecr-login@062b18f4a13f69572620f3299719468088924b27 # v2.0.1
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
 
       - name: Build Docker image
         run: docker build -t $AWS_ACCOUNT_ID.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} .
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@57a97c7e997f9e5ec466dc7e3661eb14376b3cfb # v0.35.0
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
         with:
           image-ref: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
           format: table
@@ -82,7 +82,7 @@ jobs:
           ignore-unfixed: true
 
       - name: Trivy config scan
-        uses: aquasecurity/trivy-action@57a97c7e997f9e5ec466dc7e3661eb14376b3cfb # v0.35.0
+        uses: aquasecurity/trivy-action@18f2510ee396bbf400402947b394f2dd8c87dbb0 # v0.29.0
         with:
           scan-type: config
           scan-ref: ./helm
